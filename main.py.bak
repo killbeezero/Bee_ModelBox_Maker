@@ -1,0 +1,156 @@
+import sys
+import os
+import requests
+import json
+import subprocess
+from io import BytesIO
+from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
+                             QLineEdit, QPushButton, QListWidget, QGraphicsView, QGraphicsScene, 
+                             QGraphicsPixmapItem, QMessageBox, QLabel, QListWidgetItem, QGraphicsPathItem, QSizePolicy, QGraphicsRectItem)
+from PyQt6.QtGui import QPixmap, QImage, QPainter, QFont, QColor, QPen, QPainterPath, QIcon, QFontDatabase, QTransform, QBrush, QFontMetrics
+from PyQt6.QtCore import Qt, QSize, QPointF
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+ASSETS_DIR = os.path.join(BASE_DIR, "assets")
+CONFIG_FILE = os.path.expanduser("~/.Bee_ModelBox_Config.json")
+CANVAS_WIDTH = 1583
+CANVAS_HEIGHT = 661
+
+class EnhancedGraphicsView(QGraphicsView):
+    def __init__(self, scene, parent=None):
+        super().__init__(scene, parent)
+        self.setTransformationAnchor(QGraphicsView.ViewportAnchor.AnchorUnderMouse)
+        self.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
+
+class ModelBoxLabelMaker(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("Bee ModelBox Maker 1.0 (瀑布搜尋版) 🦞")
+        self.resize(1450, 850); self.image_urls = []
+        self.current_page_idx = 1
+        
+        self.iori_id = QFontDatabase.addApplicationFont(os.path.join(ASSETS_DIR, "Iori.otf"))
+        self.iori_font = QFontDatabase.applicationFontFamilies(self.iori_id)[0] if self.iori_id != -1 else "Arial"
+        self.chiron_id = QFontDatabase.addApplicationFont(os.path.join(ASSETS_DIR, "ChironHeiHK-B.otf"))
+        self.chiron_font = QFontDatabase.applicationFontFamilies(self.chiron_id)[0] if self.chiron_id != -1 else "Arial"
+
+        self.init_ui(); self.load_saved_key()
+        QApplication.processEvents(); self.update_view_scale(); self.update_preview_text()
+
+    def init_ui(self):
+        ml = QHBoxLayout(); lp = QVBoxLayout()
+        self.key_input = QLineEdit(); self.key_input.setEchoMode(QLineEdit.EchoMode.Password)
+        self.series_input = QLineEdit("RG"); self.model_input = QLineEdit("RX-78-2")
+        self.series_input.textChanged.connect(self.update_preview_text); self.model_input.textChanged.connect(self.update_preview_text)
+        
+        s_ctl = QHBoxLayout()
+        sb = QPushButton("🔍 搜尋"); sb.clicked.connect(self.start_new_search); sb.setStyleSheet("background-color: #ea4335; color: white;")
+        nb = QPushButton("➕ More"); nb.clicked.connect(self.load_next_page) # 改名為 More 更有累積感
+        cb = QPushButton("🗑️ 清空"); cb.clicked.connect(self.clear_results)
+        s_ctl.addWidget(sb); s_ctl.addWidget(nb); s_ctl.addWidget(cb)
+        
+        self.results_list = QListWidget(); self.results_list.setViewMode(QListWidget.ViewMode.IconMode); self.results_list.setIconSize(QSize(100, 100)); self.results_list.setSpacing(5); self.results_list.itemClicked.connect(self.load_selected_image)
+        svb = QPushButton("💾 輸出標籤至 Downloads"); svb.clicked.connect(self.save_result); svb.setStyleSheet("background-color: #2ecc71; color: white; padding: 15px; font-weight: bold;")
+        
+        lp.addWidget(QLabel("0. API Key")); lp.addWidget(self.key_input)
+        lp.addWidget(QLabel("1. 資訊輸入")); lp.addWidget(self.series_input); lp.addWidget(self.model_input); lp.addLayout(s_ctl)
+        lp.addWidget(QLabel("2. 選擇圖塊")); lp.addWidget(self.results_list); lp.addWidget(svb)
+
+        self.scene = QGraphicsScene(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT); self.view = EnhancedGraphicsView(self.scene); self.view.setRenderHint(QPainter.RenderHint.Antialiasing); self.view.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform); self.view.setStyleSheet("background-color: #111111; border: none;"); self.view.viewport().installEventFilter(self)
+        self.white_bg = QGraphicsRectItem(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT); self.white_bg.setBrush(QBrush(Qt.GlobalColor.white)); self.white_bg.setPen(QPen(Qt.GlobalColor.transparent)); self.scene.addItem(self.white_bg); self.white_bg.setZValue(-5)
+        self.img_item = QGraphicsPixmapItem(); self.img_item.setFlag(QGraphicsPixmapItem.GraphicsItemFlag.ItemIsMovable); self.scene.addItem(self.img_item); self.img_item.setZValue(0)
+        self.frame_item = QGraphicsPixmapItem(); f_p = os.path.join(ASSETS_DIR, "label.png")
+        if os.path.exists(f_p): self.frame_item.setPixmap(QPixmap(f_p))
+        self.scene.addItem(self.frame_item); self.frame_item.setZValue(10)
+        self.series_text_item = QGraphicsPathItem(); self.model_text_item = QGraphicsPathItem()
+        self.scene.addItem(self.series_text_item); self.scene.addItem(self.model_text_item)
+        self.series_text_item.setZValue(20); self.model_text_item.setZValue(20)
+        ml.addLayout(lp, 1); ml.addWidget(self.view, 4); cw = QWidget(); cw.setLayout(ml); self.setCentralWidget(cw)
+
+    def start_new_search(self):
+        # 初始搜尋：清空列表
+        self.clear_results()
+        self.current_page_idx = 1
+        self.search_images()
+
+    def load_next_page(self):
+        # 翻頁搜尋：不清空，往下疊加
+        self.current_page_idx += 1
+        self.search_images()
+
+    def clear_results(self): self.results_list.clear(); self.image_urls = []
+
+    def eventFilter(self, source, event):
+        if event.type() == event.Type.Wheel and source is self.view.viewport():
+            dy = event.angleDelta().y(); z = 1.05 if dy > 0 else 0.95
+            if not self.img_item.pixmap().isNull():
+                r = self.img_item.pixmap().rect(); self.img_item.setTransformOriginPoint(QPointF(r.width()/2, r.height()/2))
+                self.img_item.setScale(self.img_item.scale() * z)
+            return True
+        return super().eventFilter(source, event)
+
+    def update_view_scale(self):
+        sc = (self.view.width() - 30) / CANVAS_WIDTH
+        self.view.setTransform(QTransform().scale(sc, sc))
+
+    def resizeEvent(self, event): self.update_view_scale(); super().resizeEvent(event)
+
+    def update_preview_text(self):
+        def mk_path(txt, ff, s, x, y):
+            p = QPainterPath(); f = QFont(ff, s, QFont.Weight.Bold); p.addText(x, y, f, txt); return p
+        fm1 = QFontMetrics(QFont(self.iori_font, 210, QFont.Weight.Bold))
+        self.series_text_item.setPath(mk_path(self.series_input.text(), self.iori_font, 210, 40, fm1.ascent() - 25))
+        self.series_text_item.setPen(QPen(Qt.GlobalColor.white, 7, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin))
+        self.series_text_item.setBrush(Qt.GlobalColor.black)
+        self.model_text_item.setPath(mk_path(self.model_input.text(), self.chiron_font, 70, 50, CANVAS_HEIGHT - 50))
+        self.model_text_item.setPen(QPen(QColor("#333333"), 3, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin))
+        self.model_text_item.setBrush(Qt.GlobalColor.white)
+
+    def load_saved_key(self):
+        if os.path.exists(CONFIG_FILE):
+            try: self.key_input.setText(json.load(open(CONFIG_FILE)).get("api_key", ""))
+            except: pass
+
+    def search_images(self):
+        q = f"{self.series_input.text()} {self.model_input.text()} boxart large"; ak = self.key_input.text().strip()
+        if not ak: return
+        json.dump({"api_key": ak}, open(CONFIG_FILE, "w"))
+        url = "https://google.serper.dev/images"
+        try:
+            res = requests.post(url, headers={'X-API-KEY': ak, 'Content-Type': 'application/json'}, data=json.dumps({"q": q, "num": 10, "page": self.current_page_idx}))
+            rj = res.json().get('images', [])
+            # 關鍵！ image_urls 也要用追加的
+            for px in rj:
+                self.image_urls.append(px['imageUrl'])
+                pix = QPixmap(); pix.loadFromData(requests.get(px['thumbnailUrl'], timeout=5).content)
+                self.results_list.addItem(QListWidgetItem(QIcon(pix), ""))
+        except Exception as e: QMessageBox.critical(self, "失敗", str(e))
+
+    def load_selected_image(self, item):
+        idx = self.results_list.row(item)
+        try:
+            res = requests.get(self.image_urls[idx], headers={'User-Agent': 'Mozilla/5.0'}, timeout=15)
+            px = QPixmap(); px.loadFromData(res.content)
+            self.img_item.setPixmap(px); self.img_item.setOffset(0, 0); self.img_item.setScale(0.5)
+            r = px.rect(); self.img_item.setTransformOriginPoint(QPointF(r.width()/2, r.height()/2))
+            self.img_item.setPos((CANVAS_WIDTH/2)-(r.width()/2), (CANVAS_HEIGHT/2)-(r.height()/2))
+        except: QMessageBox.warning(self, "警告", "載入失敗")
+
+    def save_result(self):
+        final = QImage(CANVAS_WIDTH, CANVAS_HEIGHT, QImage.Format.Format_ARGB32); final.fill(Qt.GlobalColor.white)
+        p = QPainter(final); p.setRenderHint(QPainter.RenderHint.Antialiasing); p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+        if not self.img_item.pixmap().isNull():
+            p.save(); pix = self.img_item.pixmap(); rect = pix.rect()
+            p.translate(self.img_item.pos() + QPointF(rect.width()/2, rect.height()/2)); p.scale(self.img_item.scale(), self.img_item.scale())
+            p.translate(-QPointF(rect.width()/2, rect.height()/2)); p.drawPixmap(0, 0, pix); p.restore()
+        if not self.frame_item.pixmap().isNull(): p.drawPixmap(0, 0, self.frame_item.pixmap())
+        def dr_f(pt, tx, ff, sz, x, y, c_o, c_f, sw):
+            ph = QPainterPath(); fn = QFont(ff, sz, QFont.Weight.Bold); fm = pt.fontMetrics(); y_real = y if y != 0 else fm.ascent() - 25
+            ph.addText(x, y_real, fn, tx); pt.setPen(QPen(c_o, sw, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin))
+            pt.drawPath(ph); pt.fillPath(ph, c_f)
+        dr_f(p, self.series_input.text(), self.iori_font, 210, 40, 0, Qt.GlobalColor.white, Qt.GlobalColor.black, 7)
+        dr_f(p, self.model_input.text(), self.chiron_font, 70, 50, CANVAS_HEIGHT - 50, QColor("#333333"), Qt.GlobalColor.white, 3)
+        p.end(); path = os.path.expanduser("~/Downloads/model_label.png"); final.save(path); QMessageBox.information(self, "完成", f"存至 Downloads 🦞")
+
+if __name__ == "__main__":
+    app = QApplication(sys.argv); window = ModelBoxLabelMaker(); window.show(); sys.exit(app.exec())
