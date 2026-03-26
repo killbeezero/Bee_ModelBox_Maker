@@ -193,7 +193,15 @@ class ModelBoxLabelMaker(QMainWindow):
             pt.drawPath(ph); pt.fillPath(ph, c_f)
         dr_f(p, self.series_input.text(), self.iori_font, 210, 40, 0, Qt.GlobalColor.white, Qt.GlobalColor.black, 7)
         dr_f(p, self.model_input.text(), self.chiron_font, 70, 50, CANVAS_HEIGHT - 50, QColor("#333333"), Qt.GlobalColor.white, 3)
-        p.end(); path = os.path.expanduser("~/Downloads/model_label.png"); final.save(path); QMessageBox.information(self, "完成", f"存至 Downloads 🦞")
+        p.end()
+        # 清理檔名中可能不合法的字元
+        import re
+        safe_series = re.sub(r'[\\/*?:"<>|]', "", self.series_input.text()).strip() or "未命名系列"
+        safe_model = re.sub(r'[\\/*?:"<>|]', "", self.model_input.text()).strip() or "未命名模型"
+        file_name = f"{safe_series}-{safe_model}.png"
+        path = os.path.expanduser(f"~/Downloads/{file_name}")
+        final.save(path)
+        QMessageBox.information(self, "完成", f"已儲存為：\n{file_name}\n\n存放路徑：Downloads 🦞")
 
 if __name__ == "__main__":
     app = QApplication(sys.argv); window = ModelBoxLabelMaker(); window.show(); sys.exit(app.exec())
