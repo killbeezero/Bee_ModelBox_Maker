@@ -9,7 +9,8 @@
 ![Sample 2](assets/sample2.jpg)
 ![Sample 3](assets/sample3.jpg)
 
-## 最新功能 (v1.1)
+## 最新功能 (v1.2)
+- **免設定開箱即用**：新增 DuckDuckGo 免費爬蟲搜尋引擎，免填 API Key 也能直接搜圖！
 - 支援一鍵打包導出 macOS `.app` 與 Windows `.exe`
 - 加入專屬的軟體 Icon (Windows / Mac)
 - 自動記憶上一次搜尋的系列與模型名稱
@@ -19,7 +20,7 @@
 ## 核心架構
 - **開發語言**：Python 3.14+
 - **UI 框架**：PyQt6 (GraphicsView 繪圖引擎)
-- **搜尋引擎**：Serper.dev (Google Search API)
+- **搜尋引擎**：支援免金鑰 DuckDuckGo 搜尋，並可透過 Serper.dev (Google Search API) 取得進階高品質圖片
 - **字體引擎**：支援 Iori (裝飾字) 與 ChironHeiHK (標準黑體)
 - **畫布尺寸**：1583 x 661 (標準輸出比例)
 

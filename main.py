@@ -188,9 +188,36 @@ class ModelBoxLabelMaker(QMainWindow):
 
     def search_images(self):
         q = f"{self.series_input.text()} {self.model_input.text()} boxart large"; ak = self.api_key.strip()
+        
         if not ak:
-            QMessageBox.warning(self, "警告", "請先點選齒輪設定 API Key")
-            return
+            # 如果沒有 API Key，改用免費的 DuckDuckGo 搜尋 (無須註冊)
+            try:
+                from duckduckgo_search import DDGS
+                with DDGS() as ddgs:
+                    results = list(ddgs.images(q, max_results=10))
+                    
+                if not results:
+                    QMessageBox.information(self, "提示", "免費用戶搜尋不到圖片，請嘗試更換關鍵字。")
+                    return
+                    
+                for px in results:
+                    self.image_urls.append(px['image'])
+                    pix = QPixmap()
+                    try:
+                        # DDG 有提供 thumbnail，先嘗試抓縮圖，失敗抓原圖
+                        thumb_url = px.get('thumbnail') or px['image']
+                        pix.loadFromData(requests.get(thumb_url, timeout=5).content)
+                    except:
+                        continue
+                    item = QListWidgetItem(QIcon(pix), "")
+                    item.setToolTip(f"解析度: {px.get('width', 'N/A')} x {px.get('height', 'N/A')}\n來源: DDG (免費模式)")
+                    self.results_list.addItem(item)
+                return
+            except Exception as e:
+                QMessageBox.critical(self, "免費搜尋失敗", f"DuckDuckGo 搜尋異常：{str(e)}\n\n建議您點擊右上角齒輪輸入 Serper API Key 以獲得更穩定的搜尋體驗。")
+                return
+
+        # 以下為原有 Serper.dev 搜尋邏輯 (有填 API Key 才會走到這)
         url = "https://google.serper.dev/images"
         try:
             res = requests.post(url, headers={'X-API-KEY': ak, 'Content-Type': 'application/json'}, data=json.dumps({"q": q, "num": 10, "page": self.current_page_idx}))
@@ -199,7 +226,7 @@ class ModelBoxLabelMaker(QMainWindow):
                 self.image_urls.append(px['imageUrl'])
                 pix = QPixmap(); pix.loadFromData(requests.get(px['thumbnailUrl'], timeout=5).content)
                 item = QListWidgetItem(QIcon(pix), "")
-                item.setToolTip(f"解析度: {px.get('width', 'N/A')} x {px.get('height', 'N/A')}\n來源: {px.get('source', '未知')}")
+                item.setToolTip(f"解析度: {px.get('width', 'N/A')} x {px.get('height', 'N/A')}\n來源: Serper ({px.get('source', '未知')})")
                 self.results_list.addItem(item)
         except Exception as e: QMessageBox.critical(self, "失敗", str(e))
 
