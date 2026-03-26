@@ -66,7 +66,7 @@ class ModelBoxLabelMaker(QMainWindow):
         self.chiron_id = QFontDatabase.addApplicationFont(os.path.join(ASSETS_DIR, "ChironHeiHK-B.otf"))
         self.chiron_font = QFontDatabase.applicationFontFamilies(self.chiron_id)[0] if self.chiron_id != -1 else "Arial"
 
-        self.init_ui(); self.load_saved_key()
+        self.init_ui()
         QApplication.processEvents(); self.update_view_scale(); self.update_preview_text()
 
     def init_ui(self):
@@ -82,8 +82,16 @@ class ModelBoxLabelMaker(QMainWindow):
         top_ctl.addStretch()
         top_ctl.addWidget(self.settings_btn)
         
-        self.series_input = QLineEdit("RG"); self.model_input = QLineEdit("RX-78-2")
-        self.series_input.textChanged.connect(self.update_preview_text); self.model_input.textChanged.connect(self.update_preview_text)
+        self.series_input = QLineEdit()
+        self.model_input = QLineEdit()
+        
+        # 載入上次的設定或使用預設值
+        self.load_config()
+        
+        self.series_input.textChanged.connect(self.update_preview_text)
+        self.series_input.textChanged.connect(self.save_config)
+        self.model_input.textChanged.connect(self.update_preview_text)
+        self.model_input.textChanged.connect(self.save_config)
         
         s_ctl = QHBoxLayout()
         sb = QPushButton("🔍 搜尋"); sb.clicked.connect(self.start_new_search)
@@ -114,7 +122,7 @@ class ModelBoxLabelMaker(QMainWindow):
         diag = SettingsDialog(self.api_key, self)
         if diag.exec():
             self.api_key = diag.get_key()
-            json.dump({"api_key": self.api_key}, open(CONFIG_FILE, "w"))
+            self.save_config()
             QMessageBox.information(self, "成功", "API Key 已儲存")
 
     def start_new_search(self): self.clear_results(); self.current_page_idx = 1; self.search_images()
@@ -147,10 +155,36 @@ class ModelBoxLabelMaker(QMainWindow):
         self.model_text_item.setPen(QPen(QColor("#333333"), 3, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin))
         self.model_text_item.setBrush(Qt.GlobalColor.white)
 
-    def load_saved_key(self):
+    def load_config(self):
+        self.api_key = ""
+        series_val = "RG"
+        model_val = "RX-78-2"
         if os.path.exists(CONFIG_FILE):
-            try: self.api_key = json.load(open(CONFIG_FILE)).get("api_key", "")
+            try: 
+                cfg = json.load(open(CONFIG_FILE))
+                self.api_key = cfg.get("api_key", "")
+                series_val = cfg.get("series", series_val)
+                model_val = cfg.get("model", model_val)
             except: pass
+        self.series_input.setText(series_val)
+        self.model_input.setText(model_val)
+        
+    def save_config(self):
+        try:
+            cfg = {}
+            if os.path.exists(CONFIG_FILE):
+                try: cfg = json.load(open(CONFIG_FILE))
+                except: pass
+            cfg["api_key"] = self.api_key
+            cfg["series"] = self.series_input.text()
+            cfg["model"] = self.model_input.text()
+            with open(CONFIG_FILE, "w") as f:
+                json.dump(cfg, f)
+        except Exception as e:
+            print("Save config failed:", e)
+
+    def load_saved_key(self):
+        pass # deprecated, merged into load_config
 
     def search_images(self):
         q = f"{self.series_input.text()} {self.model_input.text()} boxart large"; ak = self.api_key.strip()
