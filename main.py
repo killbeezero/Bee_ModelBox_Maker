@@ -138,7 +138,7 @@ class ModelBoxLabelMaker(QMainWindow):
 
     def update_preview_text(self):
         def mk_path(txt, ff, s, x, y):
-            p = QPainterPath(); f = QFont(ff, s, QFont.Weight.Bold); p.addText(x, y, f, txt); return p
+            p = QPainterPath(); f = QFont(ff); f.setPixelSize(s); f.setWeight(QFont.Weight.Bold); p.addText(x, y, f, txt); return p
         # y 軸在 QGraphicsTextItem 的 QPainterPath 比較容易掌握，直接寫死為 180 (大約符合字體大小的基線)
         self.series_text_item.setPath(mk_path(self.series_input.text(), self.iori_font, 210, 40, 180))
         self.series_text_item.setPen(QPen(Qt.GlobalColor.white, 7, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin))
@@ -188,7 +188,7 @@ class ModelBoxLabelMaker(QMainWindow):
             p.translate(-QPointF(rect.width()/2, rect.height()/2)); p.drawPixmap(0, 0, pix); p.restore()
         if not self.frame_item.pixmap().isNull(): p.drawPixmap(0, 0, self.frame_item.pixmap())
         def dr_f(pt, tx, ff, sz, x, y, c_o, c_f, sw):
-            ph = QPainterPath(); fn = QFont(ff, sz, QFont.Weight.Bold); pt.setFont(fn); y_real = y if y != 0 else 180
+            ph = QPainterPath(); fn = QFont(ff); fn.setPixelSize(sz); fn.setWeight(QFont.Weight.Bold); pt.setFont(fn); y_real = y if y != 0 else 180
             ph.addText(x, y_real, fn, tx); pt.setPen(QPen(c_o, sw, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin))
             pt.drawPath(ph); pt.fillPath(ph, c_f)
         dr_f(p, self.series_input.text(), self.iori_font, 210, 40, 0, Qt.GlobalColor.white, Qt.GlobalColor.black, 7)
