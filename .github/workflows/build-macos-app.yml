@@ -24,7 +24,7 @@ jobs:
         
     - name: Convert Icon
       run: |
-        python -c "from PIL import Image; img = Image.open('assets/icon.jpg'); img.save('assets/icon.icns')"
+        python -c "from PIL import Image; img = Image.open('assets/icon.png'); img.save('assets/icon.icns')"
         
     - name: Build with PyInstaller
       run: pyinstaller --noconfirm --windowed --icon "assets/icon.icns" --add-data "assets:assets" --name "Bee_ModelBox_Maker" main.py
