@@ -20,10 +20,14 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install pyinstaller requests PyQt6
+        pip install pyinstaller requests PyQt6 Pillow
         
+    - name: Convert Icon
+      run: |
+        python -c "from PIL import Image; img = Image.open('assets/icon.jpg'); img.save('assets/icon.ico', format='ICO', sizes=[(256, 256)])"
+
     - name: Build with PyInstaller
-      run: pyinstaller --noconfirm --onefile --windowed --add-data "assets;assets" --name "Bee_ModelBox_Maker" main.py
+      run: pyinstaller --noconfirm --onefile --windowed --icon "assets/icon.ico" --add-data "assets;assets" --name "Bee_ModelBox_Maker" main.py
       
     - name: Upload EXE as Artifact
       uses: actions/upload-artifact@v4
