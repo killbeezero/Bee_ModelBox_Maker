@@ -1,4 +1,4 @@
-# Bee ModelBox Maker 🦞
+# Bee ModelBox Maker
 
 ## 專案簡介
 **Bee ModelBox Maker** 是一個基於 Python 與 PyQt6 開發的桌面應用程式，專門為鋼彈模型愛好者設計。它能自動搜尋模型盒繪，並生成符合標準比例的紙盒側邊標籤，支援自定義系列名稱（如 RG, MG）與型號，並提供即時預覽與調整功能。
