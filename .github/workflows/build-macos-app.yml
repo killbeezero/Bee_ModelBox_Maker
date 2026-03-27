@@ -32,13 +32,15 @@ jobs:
         python -c "from PIL import Image; img = Image.open('assets/icon.png'); img.save('assets/icon.icns')"
         
     - name: Build with PyInstaller
-      run: pyinstaller --noconfirm --windowed --icon "assets/icon.icns" --add-data "assets:assets" --name "Bee_ModelBox_Maker" main.py
+      run: |
+        pyinstaller --noconfirm --windowed --icon "assets/icon.icns" --add-data "assets:assets" --name "Bee_ModelBox_Maker" main.py
+        cd dist && tar -czvf Bee_ModelBox_Maker-macOS.tar.gz Bee_ModelBox_Maker.app
       
     - name: Upload Mac App as Artifact
       uses: actions/upload-artifact@v4
       with:
         name: Bee_ModelBox_Maker-macOS
-        path: dist/Bee_ModelBox_Maker.app
+        path: dist/Bee_ModelBox_Maker-macOS.tar.gz
 
     - name: Create macOS Release
       uses: softprops/action-gh-release@v1
@@ -46,7 +48,7 @@ jobs:
       with:
         tag_name: ${{ github.ref }}
         name: Release ${{ github.ref }}
-        files: "dist/Bee_ModelBox_Maker.app" # Path to the artifact to upload
+        files: "dist/Bee_ModelBox_Maker-macOS.tar.gz" # Path to the compressed app
         fail_on_unmatched_files: false
         append_body: true
 
