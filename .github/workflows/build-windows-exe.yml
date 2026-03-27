@@ -46,6 +46,7 @@ jobs:
       with:
         tag_name: ${{ github.ref }}
         name: Release ${{ github.ref }}
-        body: "Release of Bee_ModelBox_Maker Windows EXE"
         files: "dist/Bee_ModelBox_Maker.exe" # Path to the artifact to upload
+        fail_on_unmatched_files: false
+        append_body: true
 
