@@ -10,6 +10,7 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QH
                              QSizePolicy, QGraphicsRectItem, QDialog, QFormLayout)
 from PyQt6.QtGui import QPixmap, QImage, QPainter, QFont, QColor, QPen, QPainterPath, QIcon, QFontDatabase, QTransform, QBrush, QFontMetrics
 from PyQt6.QtCore import Qt, QSize, QPointF
+from PyQt6.QtWidgets import QFileDialog
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 if hasattr(sys, '_MEIPASS'):
@@ -56,7 +57,7 @@ class EnhancedGraphicsView(QGraphicsView):
 class ModelBoxLabelMaker(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Bee ModelBox Maker 1.0 (懸浮尺寸版) 🦞")
+        self.setWindowTitle("模型盒標籤製作")
         self.resize(1450, 850); self.image_urls = []
         self.current_page_idx = 1
         self.api_key = ""
@@ -97,7 +98,8 @@ class ModelBoxLabelMaker(QMainWindow):
         sb = QPushButton("🔍 搜尋"); sb.clicked.connect(self.start_new_search)
         mb = QPushButton("➕ More"); mb.clicked.connect(self.load_next_page)
         cb = QPushButton("🗑️ 清空"); cb.clicked.connect(self.clear_results)
-        s_ctl.addWidget(sb); s_ctl.addWidget(mb); s_ctl.addWidget(cb)
+        lb = QPushButton("📂 載入"); lb.clicked.connect(self.load_local_image)
+        s_ctl.addWidget(sb); s_ctl.addWidget(mb); s_ctl.addWidget(cb); s_ctl.addWidget(lb)
         
         self.results_list = QListWidget(); self.results_list.setViewMode(QListWidget.ViewMode.IconMode); self.results_list.setIconSize(QSize(100, 100)); self.results_list.setSpacing(5); self.results_list.itemClicked.connect(self.load_selected_image)
         svb = QPushButton("💾 輸出標籤至 Downloads"); svb.clicked.connect(self.save_result); svb.setStyleSheet("background-color: #2ecc71; color: white; padding: 15px; font-weight: bold;")
@@ -128,6 +130,20 @@ class ModelBoxLabelMaker(QMainWindow):
     def start_new_search(self): self.clear_results(); self.current_page_idx = 1; self.search_images()
     def load_next_page(self): self.current_page_idx += 1; self.search_images()
     def clear_results(self): self.results_list.clear(); self.image_urls = []
+
+    def load_local_image(self):
+        file_path, _ = QFileDialog.getOpenFileName(self, "選擇圖片", "", "圖片檔案 (*.png *.jpg *.jpeg *.bmp *.gif)")
+        if file_path:
+            pix = QPixmap(file_path)
+            if not pix.isNull():
+                self.img_item.setPixmap(pix)
+                self.img_item.setOffset(0, 0)
+                self.img_item.setScale(0.5)
+                r = pix.rect()
+                self.img_item.setTransformOriginPoint(QPointF(r.width()/2, r.height()/2))
+                self.img_item.setPos((CANVAS_WIDTH/2)-(r.width()/2), (CANVAS_HEIGHT/2)-(r.height()/2))
+            else:
+                QMessageBox.warning(self, "警告", "無法載入圖片")
 
     def eventFilter(self, source, event):
         if event.type() == event.Type.Wheel and source is self.view.viewport():
