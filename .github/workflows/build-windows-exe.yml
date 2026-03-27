@@ -2,7 +2,8 @@ name: Build Windows EXE
 
 on:
   push:
-    branches: [ "main" ]
+    tags:        # Trigger on tag push
+      - 'v*'     # Match tags starting with 'v'
   workflow_dispatch:
 
 jobs:
@@ -11,6 +12,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0 # Fetch all history for tags
     
     - name: Set up Python
       uses: actions/setup-python@v5
@@ -34,3 +37,13 @@ jobs:
       with:
         name: Bee_ModelBox_Maker-Windows
         path: dist/Bee_ModelBox_Maker.exe
+
+    - name: Create Windows Release
+      uses: softprops/action-gh-release@v1
+      if: startsWith(github.ref, 'refs/tags/') # Only run on tag pushes
+      with:
+        tag_name: ${{ github.ref }}
+        name: Release ${{ github.ref }}
+        body: "Release of Bee_ModelBox_Maker Windows EXE"
+        files: "dist/Bee_ModelBox_Maker.exe" # Path to the artifact to upload
+
