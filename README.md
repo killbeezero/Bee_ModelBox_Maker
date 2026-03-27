@@ -5,9 +5,8 @@
 
 ## 實際產生範例 (Sample Output)
 
-![Sample 1](assets/sample1.jpg)
-![Sample 2](assets/sample2.jpg)
-![Sample 3](assets/sample3.jpg)
+![Example Shelf](assets/example_shelf.jpg)
+*印出來後貼在模型盒子側邊的實際展示效果*
 
 ## 最新功能
 - **免設定開箱即用**：新增 DuckDuckGo 免費爬蟲搜尋引擎，免填 API Key 也能直接搜圖！
