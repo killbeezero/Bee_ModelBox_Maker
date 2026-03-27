@@ -41,12 +41,10 @@ jobs:
         path: dist/Bee_ModelBox_Maker.exe
 
     - name: Create Windows Release
-      uses: softprops/action-gh-release@v1
-      if: startsWith(github.ref, 'refs/tags/') # Only run on tag pushes
+      uses: ncipollo/release-action@v1
+      if: startsWith(github.ref, 'refs/tags/')
       with:
-        tag_name: ${{ github.ref }}
-        name: Release ${{ github.ref }}
-        files: "dist/Bee_ModelBox_Maker.exe" # Path to the artifact to upload
-        fail_on_unmatched_files: false
-        append_body: true
+        artifacts: "dist/Bee_ModelBox_Maker.exe"
+        allowUpdates: true
+        token: ${{ secrets.GITHUB_TOKEN }}
 
