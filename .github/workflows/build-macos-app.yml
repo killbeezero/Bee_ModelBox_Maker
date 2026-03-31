@@ -31,13 +31,7 @@ jobs:
         pip install pyinstaller requests PyQt6 Pillow duckduckgo-search
         
     - name: Convert Icon
-      run: |
-        python -c "
-from PIL import Image
-img = Image.open('assets/icon.png')
-# macOS icns needs PNG format for each size
-img.save('assets/icon.icns', format='ICNS')
-"
+      run: python -c "from PIL import Image; img = Image.open('assets/icon.png'); img.save('assets/icon.icns', format='ICNS')"
         
     - name: Build with PyInstaller
       run: |
