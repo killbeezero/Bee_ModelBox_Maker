@@ -281,4 +281,12 @@ class ModelBoxLabelMaker(QMainWindow):
         QMessageBox.information(self, "完成", f"已儲存為：\n{file_name}\n\n存放路徑：Downloads 🦞")
 
 if __name__ == "__main__":
-    app = QApplication(sys.argv); window = ModelBoxLabelMaker(); window.show(); sys.exit(app.exec())
+    app = QApplication(sys.argv)
+    
+    icon_path = os.path.join(ASSETS_DIR, "icon.png")
+    if os.path.exists(icon_path):
+        app.setWindowIcon(QIcon(icon_path))
+    
+    window = ModelBoxLabelMaker()
+    window.show()
+    sys.exit(app.exec())
