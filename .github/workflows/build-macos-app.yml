@@ -38,6 +38,7 @@ img.save('assets/icon.icns', format='ICNS')
         
     - name: Build with PyInstaller
       run: |
+        export MACOSX_DEPLOYMENT_TARGET=10.15
         pyinstaller --noconfirm --windowed --icon "assets/icon.icns" --add-data "assets:assets" --name "Bee_ModelBox_Maker" main.py
         cd dist && tar -czvf Bee_ModelBox_Maker-macOS.tar.gz Bee_ModelBox_Maker.app
       
