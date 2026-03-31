@@ -2,13 +2,9 @@ name: Build Windows EXE
 
 on:
   push:
-    tags:        # Trigger on tag push
-      - 'v*'     # Match tags starting with 'v'
+    tags:
+      - 'v*'
   workflow_dispatch:
-    inputs:
-      tag:
-        description: 'Tag to build'
-        required: false
 
 jobs:
   build:
