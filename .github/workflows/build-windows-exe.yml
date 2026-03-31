@@ -5,6 +5,10 @@ on:
     tags:        # Trigger on tag push
       - 'v*'     # Match tags starting with 'v'
   workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to build'
+        required: false
 
 jobs:
   build:
