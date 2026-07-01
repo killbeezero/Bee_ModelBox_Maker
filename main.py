@@ -1,5 +1,7 @@
 import sys
 import os
+import re
+import html
 import requests
 import json
 import subprocess
@@ -147,10 +149,12 @@ class ModelBoxLabelMaker(QMainWindow):
 
     def eventFilter(self, source, event):
         if event.type() == event.Type.Wheel and source is self.view.viewport():
-            dy = event.angleDelta().y(); z = 1.05 if dy > 0 else 0.95
+            dy = event.pixelDelta().y()
+            if dy == 0: dy = event.angleDelta().y() / 8  # 滑鼠滾輪等無 pixelDelta 的裝置退回估算值
             if not self.img_item.pixmap().isNull():
                 r = self.img_item.pixmap().rect(); self.img_item.setTransformOriginPoint(QPointF(r.width()/2, r.height()/2))
-                self.img_item.setScale(self.img_item.scale() * z)
+                # 線性縮放：等量的觸控板位移產生等量的縮放變化，不受目前縮放比例影響（避免縮小時感覺過慢、放大時暴衝）
+                self.img_item.setScale(max(0.02, min(10.0, self.img_item.scale() + dy * 0.003)))
             return True
         return super().eventFilter(source, event)
 
@@ -159,6 +163,7 @@ class ModelBoxLabelMaker(QMainWindow):
         self.view.setTransform(QTransform().scale(sc, sc))
 
     def resizeEvent(self, event): self.update_view_scale(); super().resizeEvent(event)
+    def showEvent(self, event): super().showEvent(event); self.update_view_scale()
 
     def update_preview_text(self):
         def mk_path(txt, ff, s, x, y):
@@ -203,21 +208,21 @@ class ModelBoxLabelMaker(QMainWindow):
         pass # deprecated, merged into load_config
 
     def search_images(self):
-        q = f"{self.series_input.text()} {self.model_input.text()} boxart large"; ak = self.api_key.strip()
-        
+        q = f"{self.series_input.text()} {self.model_input.text()} boxart"; ak = self.api_key.strip()
+
         if not ak:
             # 如果沒有 API Key，改用免費的 DuckDuckGo 搜尋 (無須註冊)
             try:
                 from duckduckgo_search import DDGS
                 with DDGS() as ddgs:
-                    results = list(ddgs.images(q, max_results=10))
+                    results = list(ddgs.images(q, size="Large", max_results=10))
                     
                 if not results:
                     QMessageBox.information(self, "提示", "免費用戶搜尋不到圖片，請嘗試更換關鍵字。")
                     return
                     
                 for px in results:
-                    self.image_urls.append(px['image'])
+                    self.image_urls.append({'url': px['image'], 'referer': px.get('url', '')})
                     pix = QPixmap()
                     try:
                         # DDG 有提供 thumbnail，先嘗試抓縮圖，失敗抓原圖
@@ -236,25 +241,61 @@ class ModelBoxLabelMaker(QMainWindow):
         # 以下為原有 Serper.dev 搜尋邏輯 (有填 API Key 才會走到這)
         url = "https://google.serper.dev/images"
         try:
-            res = requests.post(url, headers={'X-API-KEY': ak, 'Content-Type': 'application/json'}, data=json.dumps({"q": q, "num": 10, "page": self.current_page_idx}))
+            res = requests.post(url, headers={'X-API-KEY': ak, 'Content-Type': 'application/json'}, data=json.dumps({"q": q, "num": 10, "page": self.current_page_idx, "tbs": "isz:l"}))
             rj = res.json().get('images', [])
             for px in rj:
-                self.image_urls.append(px['imageUrl'])
+                self.image_urls.append({'url': px['imageUrl'], 'referer': px.get('link', '')})
                 pix = QPixmap(); pix.loadFromData(requests.get(px['thumbnailUrl'], timeout=5).content)
                 item = QListWidgetItem(QIcon(pix), "")
-                item.setToolTip(f"解析度: {px.get('width', 'N/A')} x {px.get('height', 'N/A')}\n來源: Serper ({px.get('source', '未知')})")
+                item.setToolTip(f"解析度: {px.get('imageWidth', 'N/A')} x {px.get('imageHeight', 'N/A')}\n來源: Serper ({px.get('source', '未知')})")
                 self.results_list.addItem(item)
         except Exception as e: QMessageBox.critical(self, "失敗", str(e))
 
     def load_selected_image(self, item):
         idx = self.results_list.row(item)
+        ref = self.image_urls[idx]
+        url, referer = ref['url'], ref.get('referer', '')
+        headers = {'User-Agent': 'Mozilla/5.0'}
+        if referer:
+            headers['Referer'] = referer
         try:
-            res = requests.get(self.image_urls[idx], headers={'User-Agent': 'Mozilla/5.0'}, timeout=15)
-            pix = QPixmap(); pix.loadFromData(res.content)
+            res = requests.get(url, headers=headers, timeout=15)
+            res.raise_for_status()
+            if 'html' in res.headers.get('content-type', '').lower():
+                # 有些搜尋結果（如 Instagram 的 SEO 預覽頁）回傳的其實是 HTML，
+                # 真正的圖片藏在 og:image meta tag 裡，嘗試改抓那個網址
+                m = re.search(r'property="og:image"\s+content="([^"]+)"', res.text) \
+                    or re.search(r'content="([^"]+)"\s+property="og:image"', res.text)
+                if not m:
+                    QMessageBox.warning(self, "警告", f"該連結回傳的不是圖片（可能是社群網站的預覽頁）\n{url}")
+                    return
+                og_url = html.unescape(m.group(1))
+                res = requests.get(og_url, headers=headers, timeout=15)
+                res.raise_for_status()
+            pix = QPixmap()
+            pix.loadFromData(res.content)
+            if pix.isNull():
+                # Qt 內建解碼失敗(常見於部分 WebP 變體)，改用 Pillow 解碼後轉入 QPixmap
+                pix = self._decode_with_pillow(res.content)
+            if pix.isNull():
+                QMessageBox.warning(self, "警告", f"圖片解碼失敗（格式不支援或檔案損毀）\n{url}")
+                return
             self.img_item.setPixmap(pix); self.img_item.setOffset(0, 0); self.img_item.setScale(0.5)
             r = pix.rect(); self.img_item.setTransformOriginPoint(QPointF(r.width()/2, r.height()/2))
             self.img_item.setPos((CANVAS_WIDTH/2)-(r.width()/2), (CANVAS_HEIGHT/2)-(r.height()/2))
-        except: QMessageBox.warning(self, "警告", "載入失敗")
+        except Exception as e:
+            print(f"load_selected_image failed for {url}: {e}")
+            QMessageBox.warning(self, "警告", f"載入失敗：{e}")
+
+    def _decode_with_pillow(self, data):
+        try:
+            from PIL import Image
+            img = Image.open(BytesIO(data)).convert("RGBA")
+            qimg = QImage(img.tobytes(), img.width, img.height, QImage.Format.Format_RGBA8888)
+            return QPixmap.fromImage(qimg.copy())
+        except Exception as e:
+            print(f"Pillow fallback decode failed: {e}")
+            return QPixmap()
 
     def save_result(self):
         final = QImage(CANVAS_WIDTH, CANVAS_HEIGHT, QImage.Format.Format_ARGB32); final.fill(Qt.GlobalColor.white)
@@ -272,7 +313,6 @@ class ModelBoxLabelMaker(QMainWindow):
         dr_f(p, self.model_input.text(), self.chiron_font, 70, 50, CANVAS_HEIGHT - 50, QColor("#333333"), Qt.GlobalColor.white, 3)
         p.end()
         # 清理檔名中可能不合法的字元
-        import re
         safe_series = re.sub(r'[\\/*?:"<>|]', "", self.series_input.text()).strip() or "未命名系列"
         safe_model = re.sub(r'[\\/*?:"<>|]', "", self.model_input.text()).strip() or "未命名模型"
         file_name = f"{safe_series}-{safe_model}.png"
