@@ -22,6 +22,7 @@ else:
 CONFIG_FILE = os.path.expanduser("~/.Bee_ModelBox_Config.json")
 CANVAS_WIDTH = 1583
 CANVAS_HEIGHT = 661
+APP_VERSION = "1.3.7"
 
 class SettingsDialog(QDialog):
     def __init__(self, current_key, parent=None):
@@ -46,6 +47,11 @@ class SettingsDialog(QDialog):
         btns.addWidget(save_btn)
         btns.addWidget(cancel_btn)
         layout.addLayout(btns)
+
+        version_label = QLabel(f"版本 v{APP_VERSION}")
+        version_label.setStyleSheet("color: gray; font-size: 11px;")
+        version_label.setAlignment(Qt.AlignmentFlag.AlignRight)
+        layout.addWidget(version_label)
 
     def get_key(self):
         return self.api_key_input.text().strip()
@@ -153,8 +159,8 @@ class ModelBoxLabelMaker(QMainWindow):
             if dy == 0: dy = event.angleDelta().y() / 8  # 滑鼠滾輪等無 pixelDelta 的裝置退回估算值
             if not self.img_item.pixmap().isNull():
                 r = self.img_item.pixmap().rect(); self.img_item.setTransformOriginPoint(QPointF(r.width()/2, r.height()/2))
-                # 線性縮放：等量的觸控板位移產生等量的縮放變化，不受目前縮放比例影響（避免縮小時感覺過慢、放大時暴衝）
-                self.img_item.setScale(max(0.02, min(10.0, self.img_item.scale() + dy * 0.003)))
+                z = max(0.1, min(10.0, 1.0 + dy * 0.003))
+                self.img_item.setScale(max(0.02, self.img_item.scale() * z))
             return True
         return super().eventFilter(source, event)
 
